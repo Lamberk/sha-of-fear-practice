@@ -57,7 +57,7 @@ export const ROSTER_NAMES = [
   'Adamant',
   'Quaba',
   'Sweetdog',
-  'Casinogirl',
+  'Ridikool',
   'Stol',
   'Gomaro',
   'Zinoxidus',
@@ -71,4 +71,3 @@ export const ROSTER_NAMES = [
   'Plexmonk',
   'Ranomi',
 ] as const
-

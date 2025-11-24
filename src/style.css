@@ -228,7 +228,7 @@ html {
 
 .raid-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(110px, 1fr));
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
   gap: 0.75rem;
   margin-top: 1rem;
 }
@@ -236,14 +236,14 @@ html {
 .raider-card {
   position: relative;
   border-radius: 14px;
-  padding: 1rem;
+  padding: 0.75rem 0.5rem;
   background: rgba(15, 24, 53, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.08);
   text-align: center;
   transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
   cursor: pointer;
   min-height: 70px;
-  min-width: 110px;
+  min-width: 120px;
   overflow: visible;
   display: flex;
   flex-direction: column;
@@ -260,7 +260,8 @@ html {
   text-overflow: ellipsis;
   max-width: 100%;
   line-height: 1.2;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .raider-card span {
@@ -270,6 +271,7 @@ html {
   width: 100%;
   overflow: hidden;
   min-width: 0;
+  gap: 4px;
 }
 
 .raider-badge {
@@ -348,7 +350,7 @@ html {
   display: inline-block;
   width: 16px;
   height: 16px;
-  margin-left: 4px;
+  flex-shrink: 0;
   vertical-align: middle;
   pointer-events: none;
 }
