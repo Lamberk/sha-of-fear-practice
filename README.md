@@ -63,30 +63,72 @@ npm run preview
 
 ### GitHub Pages Deployment
 
-1. Update `vite.config.ts` with your repository name:
+#### Option 1: Automatic Deployment with GitHub Actions (Recommended)
+
+1. **Update the base path** in `vite.config.ts` to match your repository name:
 ```typescript
-base: '/your-repo-name/', // Change this to match your GitHub repository
+base: '/your-repo-name/', // Change 'ball' to your actual repository name
 ```
 
-2. Build the project:
+2. **Enable GitHub Pages FIRST** (this is required before the workflow can run):
+   - Go to your repository on GitHub
+   - Navigate to **Settings** → **Pages**
+   - Under **Source**, select **GitHub Actions** (not "Deploy from a branch")
+   - Click **Save**
+   - ⚠️ **Important**: You must enable Pages before pushing the workflow, or the first workflow run will fail
+
+3. **Push your code** to the `main` branch:
+```bash
+git add .
+git commit -m "Setup GitHub Pages deployment"
+git push origin main
+```
+
+4. **The workflow will automatically deploy** your site whenever you push to `main`. You can view the deployment status in the **Actions** tab of your repository.
+
+5. **Your site will be available at**: `https://your-username.github.io/your-repo-name/`
+
+#### Option 2: Manual Deployment
+
+1. **Update the base path** in `vite.config.ts`:
+```typescript
+base: '/your-repo-name/', // Change to match your repository name
+```
+
+2. **Build the project**:
 ```bash
 npm run build
 ```
 
-3. Deploy to GitHub Pages:
-   - Go to your repository Settings → Pages
-   - Select "Deploy from a branch"
-   - Choose the `gh-pages` branch (or `main` branch `/dist` folder)
-   - Or use GitHub Actions for automatic deployment
-
-4. If deploying manually:
+3. **Deploy using git subtree**:
 ```bash
-# Create a new branch for GitHub Pages
-git checkout -b gh-pages
-git add dist
+# Create orphan branch (if it doesn't exist)
+git checkout --orphan gh-pages
+git rm -rf .
+
+# Copy dist contents to root
+cp -r dist/* .
+
+# Commit and push
+git add .
 git commit -m "Deploy to GitHub Pages"
-git subtree push --prefix dist origin gh-pages
+git push origin gh-pages --force
+
+# Switch back to main branch
+git checkout main
 ```
+
+4. **Enable GitHub Pages**:
+   - Go to **Settings** → **Pages**
+   - Select **Deploy from a branch**
+   - Choose `gh-pages` branch and `/ (root)` folder
+   - Click **Save**
+
+#### Important Notes
+
+- **Repository name**: Make sure the `base` path in `vite.config.ts` matches your repository name exactly (case-sensitive)
+- **Custom domain**: If using a custom domain, set `base: '/'` in `vite.config.ts`
+- **Build artifacts**: The `dist` folder is automatically generated and should not be committed to git
 
 ## How to Play
 
