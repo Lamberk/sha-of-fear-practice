@@ -10,6 +10,7 @@ import {
 } from './constants'
 import { DOMManager, StorageManager, createRaiders } from './dom'
 import { createInitialGameState, createDummyPlayers } from './gameState'
+import { checkPlayerHitByImplacableStrike } from './collision'
 
 // Initialize DOM manager (this sets up all HTML)
 const domManager = new DOMManager()
@@ -96,13 +97,16 @@ let canvasMouseY = 0
 
 gameCanvas.addEventListener('mousemove', (event) => {
   const rect = gameCanvas.getBoundingClientRect()
-  canvasMouseX = event.clientX - rect.left
-  canvasMouseY = event.clientY - rect.top
+  // Scale mouse coordinates to match canvas logical size
+  const scaleX = gameCanvas.width / rect.width
+  const scaleY = gameCanvas.height / rect.height
+  canvasMouseX = (event.clientX - rect.left) * scaleX
+  canvasMouseY = (event.clientY - rect.top) * scaleY
   
   // Check if mouse is over player
   const playerRadius = 10
   const distToPlayer = Math.sqrt((canvasMouseX - state.playerX) ** 2 + (canvasMouseY - state.playerY) ** 2)
-  if (distToPlayer < playerRadius + 5) {
+  if (distToPlayer < playerRadius + 8) {
     hoveredRaider = { name: playerName, x: state.playerX, y: state.playerY }
     return
   }
@@ -113,7 +117,7 @@ gameCanvas.addEventListener('mousemove', (event) => {
     if (dummy.isDead) continue
     const dummyRadius = 8
     const distToDummy = Math.sqrt((canvasMouseX - dummy.x) ** 2 + (canvasMouseY - dummy.y) ** 2)
-    if (distToDummy < dummyRadius + 5) {
+    if (distToDummy < dummyRadius + 8) {
       hoveredRaider = { name: dummy.name, x: dummy.x, y: dummy.y }
       break
     }
@@ -1125,11 +1129,71 @@ function updateBossAbilities(dt: number) {
       
       // Check collision at END of duration (gives player time to move away)
       // Player coordinates are ALWAYS stored in state.playerX and state.playerY
-      if (state.currentHolderId === playerId) {
-        if (checkPlayerHitByImplacableStrike()) {
+      // Check regardless of ball possession - strike hits anyone in the cone
+      const strike = state.bossAbilities.implacableStrike
+      const isHit = checkPlayerHitByImplacableStrike({
+        bossVisible: state.bossVisible,
+        strike,
+        playerX: state.playerX,
+        playerY: state.playerY,
+      })
+      
+      // Logging for debugging
+      if (isHit || state.bossVisible) {
+        const dx = state.playerX - strike.coneStartX
+        const dy = state.playerY - strike.coneStartY
+        const distance = Math.sqrt(dx * dx + dy * dy)
+        const angleToPlayer = Math.atan2(dy, dx)
+        const coneAngle = Math.PI / 3
+        const halfConeAngle = coneAngle / 2
+        const coneLength = 300
+        const playerRadius = 10
+        
+        let bossAngle = strike.angle
+        while (bossAngle < 0) bossAngle += Math.PI * 2
+        while (bossAngle >= Math.PI * 2) bossAngle -= Math.PI * 2
+        let playerAngle = angleToPlayer
+        while (playerAngle < 0) playerAngle += Math.PI * 2
+        while (playerAngle >= Math.PI * 2) playerAngle += Math.PI * 2
+        
+        let angleDiff = Math.abs(playerAngle - bossAngle)
+        if (angleDiff > Math.PI) {
+          angleDiff = Math.PI * 2 - angleDiff
+        }
+        
+        if (isHit) {
+          console.log('[collision] Implacable Strike HIT detected!', {
+            playerX: state.playerX,
+            playerY: state.playerY,
+            coneStartX: strike.coneStartX,
+            coneStartY: strike.coneStartY,
+            distance,
+            bossAngle: strike.angle,
+            playerAngle: angleToPlayer,
+            angleDiff,
+            halfConeAngle,
+            hadBall: state.currentHolderId === playerId
+          })
+          const reason = state.currentHolderId === playerId 
+            ? 'You were hit by Implacable Strike while holding the ball!'
+            : 'You were hit by Implacable Strike!'
           console.log('[collision] Implacable Strike hit detected at end of duration!')
-          gameOver('You were hit by Implacable Strike while holding the ball!')
+          gameOver(reason)
           return
+        } else if (distance > coneLength + playerRadius) {
+          console.log('[collision] Implacable Strike MISS - too far', { distance, maxRange: coneLength + playerRadius })
+        } else {
+          console.log('[collision] Implacable Strike MISS - wrong angle', {
+            playerX: state.playerX,
+            playerY: state.playerY,
+            coneStartX: strike.coneStartX,
+            coneStartY: strike.coneStartY,
+            distance,
+            bossAngle: strike.angle,
+            playerAngle: angleToPlayer,
+            angleDiff,
+            halfConeAngle
+          })
         }
       }
       
@@ -1137,83 +1201,6 @@ function updateBossAbilities(dt: number) {
       checkDummyPlayersHitByImplacableStrike()
     }
   }
-}
-
-// Check if player is hit by Implacable Strike cone
-// ONLY checks collision for the player (not dummy players)
-// Player coordinates are ALWAYS stored in state.playerX and state.playerY
-function checkPlayerHitByImplacableStrike(): boolean {
-  if (!state.bossVisible) return false // Boss must be visible for strike to hit
-  
-  const strike = state.bossAbilities.implacableStrike
-  const playerRadius = 10 // Player hitbox radius
-  const coneLength = 300 // Length of the cone
-  const coneAngle = Math.PI / 3 // 60 degree cone (30 degrees each side)
-  
-  // Use the cone start position (where boss was when strike was cast)
-  // This is important because boss might have moved (e.g., after submerge)
-  const coneStartX = strike.coneStartX
-  const coneStartY = strike.coneStartY
-  
-  // Vector from cone start to player (using state.playerX and state.playerY)
-  const dx = state.playerX - coneStartX
-  const dy = state.playerY - coneStartY
-  const distance = Math.sqrt(dx * dx + dy * dy)
-  
-  // Check if player is within cone range (including player radius)
-  if (distance > coneLength + playerRadius) {
-    console.log('[collision] Implacable Strike MISS - too far', { distance, maxRange: coneLength + playerRadius })
-    return false
-  }
-  
-  // Calculate angle from cone start to player
-  const angleToPlayer = Math.atan2(dy, dx)
-  
-  // Normalize angles to [0, 2π]
-  let bossAngle = strike.angle
-  while (bossAngle < 0) bossAngle += Math.PI * 2
-  while (bossAngle >= Math.PI * 2) bossAngle -= Math.PI * 2
-  let playerAngle = angleToPlayer
-  while (playerAngle < 0) playerAngle += Math.PI * 2
-  while (playerAngle >= Math.PI * 2) playerAngle -= Math.PI * 2
-  
-  // Calculate angle difference (shortest path around circle)
-  let angleDiff = Math.abs(playerAngle - bossAngle)
-  if (angleDiff > Math.PI) {
-    angleDiff = Math.PI * 2 - angleDiff
-  }
-  
-  // Check if player is within cone angle (half cone angle on each side)
-  const halfConeAngle = coneAngle / 2
-  const isHit = angleDiff <= halfConeAngle
-  
-  if (isHit) {
-    console.log('[collision] Implacable Strike HIT detected!', {
-      playerX: state.playerX,
-      playerY: state.playerY,
-      coneStartX,
-      coneStartY,
-      distance,
-      bossAngle: strike.angle,
-      playerAngle: angleToPlayer,
-      angleDiff,
-      halfConeAngle
-    })
-  } else {
-    console.log('[collision] Implacable Strike MISS - wrong angle', {
-      playerX: state.playerX,
-      playerY: state.playerY,
-      coneStartX,
-      coneStartY,
-      distance,
-      bossAngle: strike.angle,
-      playerAngle: angleToPlayer,
-      angleDiff,
-      halfConeAngle
-    })
-  }
-  
-  return isHit
 }
 
 // Check if dummy players are hit by Submerge
@@ -2057,12 +2044,15 @@ function renderGame() {
     ctx.rotate(state.bossAngle)
     ctx.fillStyle = '#ffff00'
     ctx.strokeStyle = '#000000'
-    ctx.lineWidth = 2
+    ctx.lineWidth = 3
     ctx.beginPath()
-    // Arrow pointing right (will be rotated by bossAngle)
-    ctx.moveTo(bossSize / 2 + 5, 0)
-    ctx.lineTo(bossSize / 2 - 3, -4)
-    ctx.lineTo(bossSize / 2 - 3, 4)
+    // Arrow pointing right (will be rotated by bossAngle) - made bigger
+    const arrowLength = 15 // Increased from 5
+    const arrowHeadWidth = 6 // Increased from 3
+    const arrowHeadHeight = 8 // Increased from 4
+    ctx.moveTo(bossSize / 2 + arrowLength, 0)
+    ctx.lineTo(bossSize / 2 - arrowHeadWidth, -arrowHeadHeight)
+    ctx.lineTo(bossSize / 2 - arrowHeadWidth, arrowHeadHeight)
     ctx.closePath()
     ctx.fill()
     ctx.stroke()
